@@ -168,8 +168,7 @@ fastify.get('/convert', {
       200: {
         type: 'object',
         properties: {
-          path: { type: 'string', example: '/ppd_complaints?limit=1' },
-          fullPath: { type: 'string', example: 'https://postgrest-public.citygeo.phila.city/ppd_complaints?limit=1' }
+          path: { type: 'string', example: '/ppd_complaints?limit=1' }
         }
       },
       400: {
@@ -200,7 +199,7 @@ fastify.get('/convert', {
     const statement = await processSql(sql);
     const httpRequest = await renderHttp(statement);
 
-    return { path: httpRequest.fullPath, fullPath: `${POSTGREST_ENDPOINT}${httpRequest.fullPath}` };
+    return { path: httpRequest.fullPath };
   } catch (error: unknown) {
     if (error instanceof UnsupportedError) {
       reply.status(400);
