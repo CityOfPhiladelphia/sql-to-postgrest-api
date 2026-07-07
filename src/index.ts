@@ -55,8 +55,18 @@ fastify.get('/health', {
   return { msg: 'Running' };
 });
 
-fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
-  return reply.type('text/html').send("See OpenApi at <a href='/docs'>/docs</a>");
+fastify.get('/', {
+  schema: {
+    description: 'Redirects to /docs',
+    tags: ['System'],
+    response: {
+      302: {
+        type: 'null',
+      }
+    }
+  }
+}, async (request: FastifyRequest, reply: FastifyReply) => {
+  return reply.redirect('/docs')
 });
 
 // Query Proxy Route
