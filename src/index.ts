@@ -1,9 +1,12 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import { fetch } from 'undici';
 import { processSql, renderHttp, UnsupportedError } from '@supabase/sql-to-rest';
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
 
 const PORT = Number(process.env.PORT) || 3010;
 const POSTGREST_ENDPOINT = process.env.POSTGREST_ENDPOINT || "http://localhost:3000"
+const SERVER_URL = process.env.SERVER_URL || "http://localhost:3010"
 
 const fastify = Fastify({
   logger: true // Gives you structured, maintainable logging out-of-the-box
@@ -15,13 +18,76 @@ const HOP_BY_HOP_HEADERS = new Set([
   'proxy-authenticate', 'proxy-authorization', 'te', 'trailers', 'upgrade'
 ]);
 
+await fastify.register(fastifySwagger, {
+  openapi: {
+    info: {
+      title: 'SQL-to-PostgREST Proxy API',
+      description: 'Dynamically converts and proxies raw SQL queries over to PostgREST endpoints.',
+      version: '1.0.0'
+    },
+    servers: [{ url: SERVER_URL }]
+  }
+});
+
+await fastify.register(fastifySwaggerUi, {
+  routePrefix: '/docs',
+  uiConfig: {
+    docExpansion: 'full',
+    deepLinking: false
+  }
+});
+
 // Health Check Route
-fastify.get('/health', async (request, reply) => {
+fastify.get('/health', {
+  schema: {
+    description: 'Check the health status of the proxy server',
+    tags: ['System'],
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          msg: { type: 'string', example: 'Running' }
+        }
+      }
+    }
+  }
+}, async (request: FastifyRequest, reply: FastifyReply) => {
   return { msg: 'Running' };
 });
 
+fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
+  return reply.type('text/html').send("See OpenApi at <a href='/docs'>/docs</a>");
+});
+
 // Query Proxy Route
-fastify.get('/query', async (request, reply) => {
+fastify.get('/query', {
+  schema: {
+    description: 'Converts SQL into PostGRest format, execute it against the upstream PostgREST service, and streams back the response.',
+    tags: ['Query Engine'],
+    querystring: {
+      type: 'object',
+      required: ['sql'],
+      properties: {
+        sql: { type: 'string', description: 'The raw SQL query statement to parse and run', examples: ['SELECT * FROM ppd_complaints limit 1'] }
+      }
+    },
+    response: {
+      400: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' },
+          type: { type: 'string' }
+        }
+      },
+      500: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' }
+        }
+      }
+    }
+  }
+}, async (request: FastifyRequest, reply: FastifyReply) => {
   // Fastify parses search parameters into request.query automatically
   const { sql } = request.query as { sql?: string };
 
@@ -77,7 +143,41 @@ fastify.get('/query', async (request, reply) => {
 
 
 // SQL to PostgREST Conversion Route
-fastify.get('/convert', async (request, reply) => {
+fastify.get('/convert', {
+  schema: {
+    description: 'Dry-run transformation endpoint. Accepts a SQL string and exposes what the mapped PostgREST path will look like.',
+    tags: ['Query Engine'],
+    querystring: {
+      type: 'object',
+      required: ['sql'],
+      properties: {
+        sql: { type: 'string', description: 'The raw SQL query statement to translate', examples: ['SELECT * FROM ppd_complaints limit 1'] }
+      }
+    },
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', example: '/ppd_complaints?limit=1' },
+          fullPath: { type: 'string', example: 'https://postgrest-public.citygeo.phila.city/ppd_complaints?limit=1' }
+        }
+      },
+      400: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' },
+          type: { type: 'string' }
+        }
+      },
+      500: {
+        type: 'object',
+        properties: {
+          error: { type: 'string' }
+        }
+      }
+    }
+  }
+}, async (request: FastifyRequest, reply: FastifyReply) => {
   const { sql } = request.query as { sql?: string };
 
   if (!sql) {
@@ -107,11 +207,20 @@ fastify.get('/convert', async (request, reply) => {
 // Start Server & Graceful Shutdown
 const start = async () => {
   try {
-    fastify.log.info('Warming up SQL parser WASM module...');
-    await processSql('SELECT 1').catch(() => { });
-    fastify.log.info('SQL parser ready.');
+    // Force routes to build completely
+    await fastify.ready();
+
+    // Trigger true WASM compilation tax during boot sequence
+    fastify.log.info('Warming up SQL parser WASM module via route injection...');
+    await fastify.inject({
+      method: 'GET',
+      url: '/convert',
+      query: { sql: 'SELECT 1' }
+    });
+    fastify.log.info('SQL parser ready and warmed up.');
 
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
+    fastify.log.info(`Swagger UI live at: ${SERVER_URL}/docs`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

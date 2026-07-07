@@ -4,7 +4,8 @@
   // See https://www.typescriptlang.org/tsconfig/ for all options.
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "lib": [
       "ES2022"
     ],
