@@ -1,0 +1,94 @@
+name: Build and deploy docker image
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+
+env:
+  ECR_REPO: "880708401960.dkr.ecr.us-east-1.amazonaws.com"
+  REPO_NAME: "sql-to-postgrest-api"
+  PLATFORMS: "platforms: linux/amd64,linux/arm64"
+
+jobs:
+  build:
+    name: Build and deploy docker images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Parse version
+        id: parse_version
+        run: |
+          TARGET_TAG="$(cat version.txt)"
+          echo "TARGET_TAG=$TARGET_TAG" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          aws-access-key-id: ${{ secrets.CITYGEO_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.CITYGEO_AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::880708401960:role/TFRole
+          role-session-name: citygeo-docker-builds
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Check if image tag exists
+        id: check_tag
+        run: |
+          TARGET_TAG="${{ steps.parse_version.outputs.TARGET_TAG }}"
+
+          echo "Checking if tag '$TARGET_TAG' exists in repository '$REPO_NAME'..."
+
+          # Query AWS ECR. If it finds the tag, it returns 0. If it doesn't, it returns an error code.
+          if aws ecr describe-images --repository-name "$REPO_NAME" --image-ids imageTag="$TARGET_TAG" > /dev/null 2>&1; then
+            echo "Image tag already exists in ECR. Skipping build workflow pipeline."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Image tag not found. Proceeding with compilation."
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          message: |
+            Build for **${{ env.REPO_NAME }}** ${{ steps.check_tag.outputs.exists == 'true' && 'is ⏩ skipped because the tag in version.txt already exists' || 'will proceed 🛠️ because the tag in version.yaml does not exist' }}
+
+      - name: Set up QEMU
+        if: steps.check_tag.outputs.exists != 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.check_tag.outputs.exists != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push with Buildx
+        if: steps.check_tag.outputs.exists != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.ECR_REPO }}/${{ env.REPO_NAME }}:${{ steps.parse_version.outputs.TARGET_TAG }}
+            ${{ env.ECR_REPO }}/${{ env.REPO_NAME }}:latest
+          # Enables Buildx local GitHub actions caching to speed up consecutive builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  trigger_renovate:
+    if: github.ref == 'refs/heads/main'
+    # Wait until the build is complete
+    needs: [build]
+    uses: CityOfPhiladelphia/citygeo-shared-workflows/.github/workflows/trigger_renovate.yaml@main
+    with:
+      target_repo: "CityOfPhiladelphia/citygeo-variety-apps"
+    secrets: inherit
