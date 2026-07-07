@@ -82,13 +82,6 @@ fastify.get('/query', {
       }
     },
     response: {
-      400: {
-        type: 'object',
-        properties: {
-          error: { type: 'string' },
-          type: { type: 'string' }
-        }
-      },
       500: {
         type: 'object',
         properties: {
@@ -139,15 +132,12 @@ fastify.get('/query', {
     return reply.send();
 
   } catch (error: unknown) {
-    if (error instanceof UnsupportedError) {
-      reply.status(400);
-      return { error: 'This query cannot be converted to PostgREST syntax', type: 'unsupported' };
+    if (error instanceof Error) {
+      reply.status(500).send({ "error": error.message });
+    } else {
+      request.log.error(error);
+      reply.status(500);
     }
-
-    // Let global error handler catch unexpected errors, or log and 500 here:
-    request.log.error(error);
-    reply.status(500);
-    return { error: 'Internal Server Error' };
   }
 });
 
@@ -169,13 +159,6 @@ fastify.get('/convert', {
         type: 'object',
         properties: {
           path: { type: 'string', example: '/ppd_complaints?limit=1' }
-        }
-      },
-      400: {
-        type: 'object',
-        properties: {
-          error: { type: 'string' },
-          type: { type: 'string' }
         }
       },
       500: {
@@ -201,15 +184,12 @@ fastify.get('/convert', {
 
     return { path: httpRequest.fullPath };
   } catch (error: unknown) {
-    if (error instanceof UnsupportedError) {
-      reply.status(400);
-      return { error: 'This query cannot be converted to PostgREST syntax', type: 'unsupported' };
+    if (error instanceof Error) {
+      reply.status(500).send({ "error": error.message });
+    } else {
+      request.log.error(error);
+      reply.status(500);
     }
-
-    // Let global error handler catch unexpected errors, or log and 500 here:
-    request.log.error(error);
-    reply.status(500);
-    return { error: 'Internal Server Error' };
   }
 });
 
