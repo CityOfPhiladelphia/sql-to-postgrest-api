@@ -107,6 +107,10 @@ fastify.get('/convert', async (request, reply) => {
 // Start Server & Graceful Shutdown
 const start = async () => {
   try {
+    fastify.log.info('Warming up SQL parser WASM module...');
+    await processSql('SELECT 1').catch(() => { });
+    fastify.log.info('SQL parser ready.');
+
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
   } catch (err) {
     fastify.log.error(err);
