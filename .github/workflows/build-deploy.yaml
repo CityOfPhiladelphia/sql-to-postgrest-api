@@ -35,7 +35,7 @@ jobs:
           aws-access-key-id: ${{ secrets.CITYGEO_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.CITYGEO_AWS_SECRET_ACCESS_KEY }}
           role-to-assume: arn:aws:iam::880708401960:role/TFRole
-          role-session-name: citygeo-docker-builds
+          role-session-name: citygeo-ghactions-builds
 
       - name: Login to Amazon ECR
         id: login-ecr

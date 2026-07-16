@@ -72,7 +72,7 @@ fastify.get('/', {
 // Query Proxy Route
 fastify.get('/query', {
   schema: {
-    description: 'Converts SQL into PostGRest format, execute it against the upstream PostgREST service, and streams back the response.',
+    description: 'Converts SQL into PostgREST format, execute it against the upstream PostgREST service, and streams back the response.',
     tags: ['Query Engine'],
     querystring: {
       type: 'object',
@@ -145,7 +145,7 @@ fastify.get('/query', {
 // SQL to PostgREST Conversion Route
 fastify.get('/convert', {
   schema: {
-    description: 'Dry-run transformation endpoint. Accepts a SQL string and exposes what the mapped PostgREST path will look like.',
+    description: 'Accepts a SQL string and exposes what the mapped PostgREST path will look like.',
     tags: ['Query Engine'],
     querystring: {
       type: 'object',
