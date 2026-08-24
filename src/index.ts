@@ -133,7 +133,9 @@ fastify.get('/query', {
 
   } catch (error: unknown) {
     if (error instanceof UnsupportedError) {
-      reply.status(400).send({ "error": error.message });
+      reply.status(400).send({
+        "code": "unsupported", "error": error.message
+      });
     } else if (error instanceof Error) {
       reply.status(500).send({ "error": error.message });
     } else {
@@ -187,7 +189,9 @@ fastify.get('/convert', {
     return { path: httpRequest.fullPath };
   } catch (error: unknown) {
     if (error instanceof UnsupportedError) {
-      reply.status(400).send({ "error": error.message });
+      reply.status(400).send({
+        "code": "unsupported", "error": error.message
+      });
     } else if (error instanceof Error) {
       reply.status(500).send({ "error": error.message });
     } else {
