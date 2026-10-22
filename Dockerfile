@@ -38,5 +38,6 @@ COPY --from=builder --chown=node:node /app/dist ./dist
 # Expose proxy port
 EXPOSE 3010
 
-# Run the application
-CMD ["node", "dist/index.js"]
+# Run the application. --liftoff-only keeps V8 from TurboFan-compiling the pg-parser
+# WASM under load, which spikes native memory by ~500Mi for a fraction of a second.
+CMD ["node", "--liftoff-only", "dist/index.js"]
